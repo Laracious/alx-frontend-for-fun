@@ -1,50 +1,56 @@
-#!/usr/bin/python3
-"""
-A script that converts Markdown to HTML.
-"""
-
 import sys
-import os
+import os.path
 import re
+import hashlib
 
-def convert_markdown_to_html(input_file, output_file):
-    """
-    Converts a Markdown file to HTML and writes the output to a file.
-    """
-    # Check that the Markdown file exists and is a file
-    if not (os.path.exists(input_file) and os.path.isfile(input_file)):
-        print(f"Missing {input_file}", file=sys.stderr)
-        sys.exit(1)
+def convert_markdown_to_html(input_filename, output_filename):
+    with open(input_filename, 'r') as input_file:
+        markdown_content = input_file.read()
+        html_content = process_markdown(markdown_content)
+    
+    with open(output_filename, 'w') as output_file:
+        output_file.write(html_content)
 
-    # Read the Markdown file and convert it to HTML
-    with open(input_file, encoding="utf-8") as f:
-        html_lines = []
-        for line in f:
-            # Check for Markdown headings
-            match = re.match(r"^(#+) (.*)$", line)
-            if match:
-                heading_level = len(match.group(1))
-                heading_text = match.group(2)
-                html_lines.append(f"<h{heading_level}>{heading_text}</h{heading_level}>")
-            else:
-                html_lines.append(line.rstrip())
+def process_markdown(markdown_content):
+    lines = markdown_content.split("\n")
+    html_lines = []
+    inside_paragraph = False
+    md5_pattern = re.compile(r'\[\[(.*?)\]\]')
+    remove_c_pattern = re.compile(r'\(\((.*?)\)\)')
 
-    # Write the HTML output to a file
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write("\n".join(html_lines))
+    for line in lines:
+        if line.strip():
+            if not inside_paragraph:
+                inside_paragraph = True
+                html_lines.append("<p>")
+            
+            # Process MD5 and remove 'c' within the line
+            line = md5_pattern.sub(lambda x: hashlib.md5(x.group(1).encode('utf-8')).hexdigest(), line)
+            line = remove_c_pattern.sub(lambda x: x.group(1).replace('c', '', flags=re.IGNORECASE), line)
+            
+            html_lines.append(f"    {line}")
+        else:
+            if inside_paragraph:
+                inside_paragraph = False
+                html_lines.append("</p>")
+            html_lines.append(line)
+    
+    if inside_paragraph:
+        html_lines.append("</p>")
+    
+    return "\n".join(html_lines)
 
-if __name__ == "__main__":
-    # Check that the correct number of arguments were provided
-    if len(sys.argv) != 3:
-        print("Usage: ./markdown2html.py <input_file> <output_file>", file=sys.stderr)
-        sys.exit(1)
+if len(sys.argv) < 3:
+    sys.stderr.write("Usage: ./markdown2html.py <input_file> <output_file>\n")
+    sys.exit(1)
 
-    # Get the input and output file names from the command-line arguments
-    input_file = sys.argv[1]
-    output_file = sys.argv[2]
+input_filename = sys.argv[1]
+output_filename = sys.argv[2]
 
-    # Convert the Markdown file to HTML and write the output to a file
-    convert_markdown_to_html(input_file, output_file)
+if not os.path.exists(input_filename):
+    sys.stderr.write(f"Missing {input_filename}\n")
+    sys.exit(1)
 
-    # Exit with a successful status code
-    sys.exit(0)
+convert_markdown_to_html(input_filename, output_filename)
+sys.exit(0)
+
